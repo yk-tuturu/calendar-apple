@@ -1,0 +1,11 @@
+frame_high/
+frames
+playwright-profile*/
+profiles_backup/
+
+credentials.json
+token.pkl
+profiles_backup
+.venv/
+_pycache_/
+backup
