@@ -22,7 +22,7 @@ def hide_all_calendars_except_one(page, calendar_name):
         
         # Wait for calendar items to load
         page.locator("div[aria-label='My calendars'] li").first.wait_for(state='visible', timeout=5000)
-        time.sleep(3)
+        time.sleep(2)
         
         calendar_items = page.locator("div[aria-label='My calendars'] li").all()
         print(len(calendar_items))
@@ -64,32 +64,74 @@ with sync_playwright() as p:
     if not os.path.exists(base_profile):
         os.makedirs(base_profile)
 
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=base_profile,
+            headless=False,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--disable-infobars',  # Disable the automation infobar
+                '--disable-extensions',
+                '--disable-popup-blocking',
+                '--disable-dev-shm-usage',  # Overcome limited resource problems
+                '--no-sandbox',  # For stability
+            ]
+        )
 
-    context = p.chromium.launch_persistent_context(
-        user_data_dir=base_profile,
-        headless=False,
-        args=[
-            '--disable-blink-features=AutomationControlled',
-            '--disable-infobars',  # Disable the automation infobar
-            '--disable-extensions',
-            '--disable-popup-blocking',
-            '--disable-dev-shm-usage',  # Overcome limited resource problems
-            '--no-sandbox',  # For stability
-        ]
-    )
+        page = context.pages[0]
+        page.goto('https://calendar.google.com')
 
-    page = context.pages[0]
-    page.goto('https://calendar.google.com')
+        text = ""
 
-    text = ""
+        while not text == "done":
+            text = input("Enter 'done' in the terminal once you are finished")
+    
+    else: 
+        text = ""
 
-    while not text == "done":
-        text = input("Enter 'done' in the terminal once you are finished")
+        while not text == "yes" and not text == "no":
+            text = input("You are already logged in. Do you want to change your profile? (yes/no): ")
+
+        if (text == "yes"): 
+            shutil.rmtree("playwright-profile")
+            for i in range(6):
+                dir = "playwright-profile-" + str(i)
+                if os.path.isdir(dir):
+                    shutil.rmtree(dir)
+            
+            os.makedirs(base_profile)
+
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=base_profile,
+                headless=False,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-infobars',  # Disable the automation infobar
+                    '--disable-extensions',
+                    '--disable-popup-blocking',
+                    '--disable-dev-shm-usage',  # Overcome limited resource problems
+                    '--no-sandbox',  # For stability
+                ]
+            )
+
+            page = context.pages[0]
+            page.goto('https://calendar.google.com')
+
+            text = ""
+
+            while not text == "done":
+                text = input("Enter 'done' in the terminal once you are finished: ")
+
+resolution = ""
+
+while not resolution == "4" and not resolution == "6":
+    resolution = input("Input resolution (4 or 6 calendars): ")
+
+resolution = int(resolution)
 
 
 with sync_playwright() as p:
     screen_width, screen_height = pyautogui.size()
-    half_width = screen_width // 3
+    half_width = screen_width // 3 if resolution == 6 else screen_width // 2
     half_height = screen_height // 2
     
     base_profile = Path("./playwright-profile")
@@ -97,7 +139,7 @@ with sync_playwright() as p:
     contexts = []
     pages = []
     
-    for i in range(6):
+    for i in range(resolution):
         profile_dir = f"./playwright-profile-{i}"
         
         if not Path(profile_dir).exists() and base_profile.exists():
@@ -115,11 +157,16 @@ with sync_playwright() as p:
                 '--no-sandbox',  # For stability
             ]
         )
-        
-        page = context.pages[0]
-        page.set_viewport_size({"width": half_width - 125, "height": half_height - 200})
-        page.goto('https://calendar.google.com')
 
+        page = context.pages[0]
+        page.goto('https://calendar.google.com')
+        hide_all_calendars_except_one(page, str(i))
+
+        if resolution == 6:
+            page.set_viewport_size({"width": half_width - 125, "height": half_height - 200})
+        else:
+            page.set_viewport_size({"width": half_width - 200, "height": half_height - 200})
+        
         time.sleep(1)
         
         all_windows = gw.getAllWindows()
@@ -129,8 +176,9 @@ with sync_playwright() as p:
             window = chrome_windows[0]
             print(f"Found window: {window.title}")
             
-            x = (i % 3) * half_width
-            y = (i // 3) * half_height
+            x = int((i % (resolution / 2)) * half_width)
+            y = int((i // (resolution / 2)) * half_height)
+
             
             window.moveTo(x, y)
 
@@ -145,7 +193,7 @@ with sync_playwright() as p:
         
         time.sleep(0.7)
 
-        hide_all_calendars_except_one(page, str(i))
+        
     
     # Wait for all calendars to load
     next_buttons = []
@@ -157,18 +205,21 @@ with sync_playwright() as p:
         time.sleep(0.2)
         
         # Set zoom to 50%
-        page.keyboard.press('Control+0')
-        time.sleep(0.2)
-        for _ in range(4):
-            page.keyboard.press('Control+Minus')
-            time.sleep(0.1)
+        if resolution == 6:
+            page.add_style_tag(content="body { zoom: 0.3; }")
+        else:
+            page.add_style_tag(content="body { zoom: 0.5; }")
     
     # # Click consecutively across all windows
     try:
         for i in range(1100):
-            for i in range(6):
+            for i in range(resolution):
                 next_buttons[i].click()
-            time.sleep(3)
+            
+            if resolution == 6:
+                time.sleep(3)
+            else: 
+                time.sleep(1.3)
     except KeyboardInterrupt:
         print("\nStopped by user")
     finally:
