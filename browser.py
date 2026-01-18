@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 import pygetwindow as gw
 import pyautogui
+import os
 
 def hide_all_calendars_except_one(page, calendar_name):
     """Hide all calendars except the specified one"""
@@ -24,6 +25,7 @@ def hide_all_calendars_except_one(page, calendar_name):
         time.sleep(3)
         
         calendar_items = page.locator("div[aria-label='My calendars'] li").all()
+        print(len(calendar_items))
         
         for item in calendar_items:
             checkbox = item.locator('input[type="checkbox"]')
@@ -53,6 +55,37 @@ def hide_all_calendars_except_one(page, calendar_name):
         print(f"Error hiding calendars: {e}")
         import traceback
         traceback.print_exc()
+
+with sync_playwright() as p: 
+    print("Log in into Google")
+    
+    base_profile = Path("./playwright-profile")
+
+    if not os.path.exists(base_profile):
+        os.makedirs(base_profile)
+
+
+    context = p.chromium.launch_persistent_context(
+        user_data_dir=base_profile,
+        headless=False,
+        args=[
+            '--disable-blink-features=AutomationControlled',
+            '--disable-infobars',  # Disable the automation infobar
+            '--disable-extensions',
+            '--disable-popup-blocking',
+            '--disable-dev-shm-usage',  # Overcome limited resource problems
+            '--no-sandbox',  # For stability
+        ]
+    )
+
+    page = context.pages[0]
+    page.goto('https://calendar.google.com')
+
+    text = ""
+
+    while not text == "done":
+        text = input("Enter 'done' in the terminal once you are finished")
+
 
 with sync_playwright() as p:
     screen_width, screen_height = pyautogui.size()

@@ -4,6 +4,19 @@ import cv2
 import numpy as np
 from datetime import datetime, timedelta
 import os
+from google_auth_oauthlib.flow import InstalledAppFlow
+
+def get_auth():
+    # Calendar API scope: full access
+    SCOPES = ['https://www.googleapis.com/auth/calendar']
+
+    # OAuth flow
+    flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+    creds = flow.run_local_server(port=0)
+
+    # Save token for later use
+    with open('token.pkl', 'wb') as token_file:
+        pickle.dump(creds, token_file)
 
 def create_event(base_date, row, col, slot_length, service, calendar_id, tz_offset="+08:00"):
     # Calculate start and end datetime
@@ -29,18 +42,20 @@ def create_event(base_date, row, col, slot_length, service, calendar_id, tz_offs
     service.events().insert(calendarId=calendar_id, body=event).execute()
     print(f"Created event from {start_dt} to {end_dt} in calendar id: {calendar_id}")
 
-def render_frame(service, filepath, base_date, calendars):
+def render_frame(service, filepath, base_date, calendars, resolution):
     frame = cv2.imread(filepath, 0) # read image as grayscale. Set second parameter to 1 if rgb is required
+
+    width = 21 if resolution == 6 else 14
 
     calendar_frame = cv2.resize(
         frame.astype(np.uint8),       # must be uint8 for cv2
-        (21, 48),                      # width x height
+        (width, 48),                      # width x height
         interpolation=cv2.INTER_AREA  # good for downscaling
     )
 
     calendar_frame = (calendar_frame / 255.0 > 0.5).astype(int)
 
-    grid_positions = [
+    grid_positions_6 = [
         (0, 23, 0, 6),    
         (0, 23, 7, 13),   
         (0, 23, 14, 20), 
@@ -49,9 +64,20 @@ def render_frame(service, filepath, base_date, calendars):
         (24, 47, 14, 20) 
     ]
 
+    grid_positions_4 = [
+        (0, 23, 0, 6),    
+        (0, 23, 7, 13),   
+        (24, 47, 0, 6),   
+        (24, 47, 7, 13)
+    ]
+
     for calendar_idx in range(6):
         calendar_id = calendars[calendar_idx]
-        row_start, row_end, col_start, col_end = grid_positions[calendar_idx]
+        row_start, row_end, col_start, col_end = grid_positions_6[calendar_idx]
+
+        if resolution == 4:
+            row_start, row_end, col_start, col_end = grid_positions_4[calendar_idx]
+
 
         for col in range(7):
             curr_length = 0
@@ -118,9 +144,24 @@ def get_calendar_ids(service):
     return result
 
 def render_all():
+    get_auth()
+
+    resolution = ""
+
+    while not resolution == '4' and not resolution == '6':  
+        resolution = input("Select resolution (4 or 6 calendars): ")
+    resolution = int(resolution)
+    
+    fps = ''
+
+    while not fps == "high" and not fps == "low": 
+        fps = input("Select frame rate (high or low): ")
+    
+
     curr = 0
     limit = 50
-    directory = "frame_high"
+    directory = fps == "frame_high" if fps == "high" else "frames"
+
     base_date = datetime.strptime("2026-01-18", "%Y-%m-%d")
 
     # Init google calendar service
@@ -135,7 +176,7 @@ def render_all():
     for filename in os.listdir(directory):
         filepath = os.path.join(directory, filename)
         if os.path.isfile(filepath) and filepath.lower().endswith(".png"):
-            render_frame(service, filepath, base_date, calendars)
+            render_frame(service, filepath, base_date, calendars, resolution)
             curr += 1
             base_date += timedelta(days=7)
 
